@@ -30,7 +30,9 @@
       </div>
     </div>
     <div class="ui">
-      <div>Score: <span id="score">0</span></div>
+      <div>
+        Score: <span id="score">0</span> | Highscore: <span id="highscore">0</span>
+      </div>
       <div>
         <button id="btnStart" class="btn">Start / Restart</button>
       </div>
@@ -51,6 +53,7 @@
     let pipes = [];
     let frame = 0;
     let score = 0;
+    let highscore = parseInt(localStorage.getItem('flappyStevenHighscore')) || 0;
 
     const gravity = 0.45;
     const flapStrength = -8.5;
@@ -65,19 +68,22 @@
     };
 
     const pipeWidth = 60;
-    const gapSize = 200; // wider gap between pipes
-    const pipeSpacing = 220; // further apart horizontally
+    const gapSize = 200;
+    const pipeSpacing = 220;
     const pipeSpeed = 2.4;
 
     const scoreEl = document.getElementById('score');
+    const highscoreEl = document.getElementById('highscore');
     const btnStart = document.getElementById('btnStart');
     const msg = document.getElementById('msg');
     const msgTitle = document.getElementById('msgTitle');
     const msgText = document.getElementById('msgText');
 
+    highscoreEl.textContent = highscore;
+
     birdImg.src = BIRD_SRC;
     birdImg.onload = () => {
-      const maxSide = 40; // smaller Steven
+      const maxSide = 40;
       const scale = Math.min(maxSide / birdImg.width, maxSide / birdImg.height, 1.6);
       bird.w = Math.round(birdImg.width * scale);
       bird.h = Math.round(birdImg.height * scale);
@@ -120,7 +126,14 @@
 
     function endGame() {
       gameOver = true; running = false;
-      showMessage('Game Over', `Score: ${score} — Click Start to try again`);
+      if (score > highscore) {
+        highscore = score;
+        localStorage.setItem('flappyStevenHighscore', highscore);
+        highscoreEl.textContent = highscore;
+        showMessage('New Highscore!', `Score: ${score} — Click Start to play again`);
+      } else {
+        showMessage('Game Over', `Score: ${score} — Click Start to try again`);
+      }
     }
 
     function spawnPipe(x) {
