@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Flappy Steven</title>
+  <style>
+    :root{--bg:#70c5ce;--ground:#ded895;}
+    html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(#80d0d9,#70c5ce);}
+    .wrap{width:100%;max-width:480px;margin:20px;}
+    canvas{display:block;width:100%;height:auto;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);background:linear-gradient(#70c5ce 0%, #a0e0ea 60%)}
+    .ui{display:flex;justify-content:space-between;align-items:center;margin-top:8px;color:#064;}
+    .btn{background:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;box-shadow:0 3px 8px rgba(0,0,0,.12)}
+    .center-msg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.4)}
+    .center-msg h1{margin:0 0 8px;font-size:24px}
+    .center-msg p{margin:0;font-size:14px}
+    .overlay{position:relative}
+    footer{margin-top:12px;font-size:12px;color:#033;opacity:.8}
+    @media (max-width:420px){.wrap{max-width:360px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="overlay">
+      <canvas id="game" width="480" height="640"></canvas>
+      <div id="msg" class="center-msg" style="display:none;pointer-events:none;">
+        <h1 id="msgTitle"></h1>
+        <p id="msgText"></p>
+      </div>
+    </div>
+    <div class="ui">
+      <div>Score: <span id="score">0</span></div>
+      <div>
+        <button id="btnStart" class="btn">Start / Restart</button>
+      </div>
+    </div>
+    <footer>Controls: Click / Tap / Space — Bird image: <strong>steven.jpg</strong></footer>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+
+    const BIRD_SRC = 'steven.jpg';
+
+    let birdImg = new Image();
+    let running = false;
+    let gameOver = false;
+    let pipes = [];
+    let frame = 0;
+    let score = 0;
+
+    const gravity = 0.45;
+    const flapStrength = -8.5;
+
+    const bird = {
+      x: 90,
+      y: H/2 - 24,
+      w: 32,
+      h: 32,
+      vy: 0,
+      rotation: 0
+    };
+
+    const pipeWidth = 60;
+    const gapSize = 200; // wider gap between pipes
+    const pipeSpacing = 220; // further apart horizontally
+    const pipeSpeed = 2.4;
+
+    const scoreEl = document.getElementById('score');
+    const btnStart = document.getElementById('btnStart');
+    const msg = document.getElementById('msg');
+    const msgTitle = document.getElementById('msgTitle');
+    const msgText = document.getElementById('msgText');
+
+    birdImg.src = BIRD_SRC;
+    birdImg.onload = () => {
+      const maxSide = 40; // smaller Steven
+      const scale = Math.min(maxSide / birdImg.width, maxSide / birdImg.height, 1.6);
+      bird.w = Math.round(birdImg.width * scale);
+      bird.h = Math.round(birdImg.height * scale);
+      bird.y = H/2 - bird.h/2;
+      drawStartScreen();
+    };
+    birdImg.onerror = () => {
+      drawPlaceholder();
+      showMessage('Missing image', 'Put a file named "steven.jpg" in the same folder as this HTML file and reload.');
+    };
+
+    function flap() {
+      if (!running) startGame();
+      if (gameOver) return;
+      bird.vy = flapStrength;
+      bird.rotation = -0.7;
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') { e.preventDefault(); flap(); }
+      if (e.code === 'Enter' && gameOver) restart();
+    });
+    canvas.addEventListener('mousedown', flap);
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); flap(); }, {passive:false});
+
+    btnStart.addEventListener('click', () => {
+      if (!running) startGame(); else restart();
+    });
+
+    function startGame() {
+      running = true; gameOver = false; score = 0; frame = 0; pipes = [];
+      bird.x = 90; bird.y = H/2 - bird.h/2; bird.vy = 0; bird.rotation = 0;
+      scoreEl.textContent = score;
+      hideMessage();
+      for (let i = 0; i < 3; i++) spawnPipe(W + i * (pipeWidth + pipeSpacing) + 200);
+      loop();
+    }
+
+    function restart() { startGame(); }
+
+    function endGame() {
+      gameOver = true; running = false;
+      showMessage('Game Over', `Score: ${score} — Click Start to try again`);
+    }
+
+    function spawnPipe(x) {
+      const topHeight = Math.floor(Math.random() * (H - gapSize - 160)) + 40;
+      const pipe = { x: x, top: topHeight, w: pipeWidth, passed: false };
+      pipes.push(pipe);
+    }
+
+    function loop() {
+      if (!running) return;
+      frame++;
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    function update() {
+      bird.vy += gravity;
+      bird.y += bird.vy;
+      bird.rotation += (Math.min(1.2, bird.vy / 10) - bird.rotation) * 0.08;
+
+      for (let p of pipes) {
+        p.x -= pipeSpeed;
+        if (!p.passed && p.x + p.w < bird.x) { score++; p.passed = true; scoreEl.textContent = score; }
+      }
+      if (pipes.length && pipes[0].x + pipes[0].w < -50) pipes.shift();
+      if (frame % Math.floor((pipeSpacing + pipeWidth) / pipeSpeed) === 0) spawnPipe(W + 40);
+
+      if (bird.y + bird.h > H - 80) { bird.y = H - 80 - bird.h; endGame(); }
+      if (bird.y < 0) { bird.y = 0; bird.vy = 0; }
+
+      for (let p of pipes) {
+        const gapTop = p.top;
+        const gapBottom = p.top + gapSize;
+        const bx1 = bird.x, by1 = bird.y, bx2 = bird.x + bird.w, by2 = bird.y + bird.h;
+        const tx1 = p.x, ty1 = 0, tx2 = p.x + p.w, ty2 = gapTop;
+        const bxpipe1 = p.x, bypipe1 = gapBottom, bxpipe2 = p.x + p.w, bypipe2 = H - 80;
+        if (rectIntersect(bx1,by1,bx2,by2, tx1,ty1,tx2,ty2) || rectIntersect(bx1,by1,bx2,by2, bxpipe1,bypipe1,bxpipe2,bypipe2)) endGame();
+      }
+    }
+
+    function rectIntersect(ax1,ay1,ax2,ay2, bx1,by1,bx2,by2){
+      return !(bx1 > ax2 || bx2 < ax1 || by1 > ay2 || by2 < ay1);
+    }
+
+    function draw() {
+      ctx.clearRect(0,0,W,H);
+      const sky = ctx.createLinearGradient(0,0,0,H);
+      sky.addColorStop(0,'#70c5ce');
+      sky.addColorStop(1,'#a0e0ea');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0,0,W,H);
+
+      for (let p of pipes) drawPipe(p);
+      ctx.fillStyle = '#ded895';
+      ctx.fillRect(0,H-80,W,80);
+      ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+      for (let i=0;i<10;i++){ctx.beginPath();ctx.moveTo(i*60,H-40);ctx.lineTo(i*60+40,H-60);ctx.stroke();}
+
+      ctx.save();
+      const cx = bird.x + bird.w/2;
+      const cy = bird.y + bird.h/2;
+      ctx.translate(cx, cy);
+      ctx.rotate(bird.rotation);
+      if (birdImg.complete && birdImg.naturalWidth) ctx.drawImage(birdImg, -bird.w/2, -bird.h/2, bird.w, bird.h);
+      else { ctx.fillStyle = '#ff0'; ctx.fillRect(-bird.w/2, -bird.h/2, bird.w, bird.h); }
+      ctx.restore();
+
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.font = 'bold 56px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(score, W/2 + 3, 110);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(score, W/2, 108);
+    }
+
+    function drawPipe(p) {
+      ctx.fillStyle = '#3eb34a';
+      ctx.fillRect(p.x, 0, p.w, p.top);
+      ctx.fillRect(p.x, p.top + gapSize, p.w, H - 80 - (p.top + gapSize));
+      ctx.fillStyle = '#2c8a36';
+      ctx.fillRect(p.x - 4, p.top - 8, p.w + 8, 8);
+      ctx.fillRect(p.x - 4, p.top + gapSize, p.w + 8, 8);
+    }
+
+    function drawStartScreen() {
+      ctx.clearRect(0,0,W,H);
+      const sky = ctx.createLinearGradient(0,0,0,H);
+      sky.addColorStop(0,'#70c5ce');
+      sky.addColorStop(1,'#a0e0ea');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0,0,W,H);
+      ctx.fillStyle = '#ded895'; ctx.fillRect(0,H-80,W,80);
+      ctx.save();
+      const bx = W/2 - bird.w/2;
+      const by = H/2 - bird.h/2 - 30;
+      if (birdImg.complete && birdImg.naturalWidth) ctx.drawImage(birdImg, bx, by, bird.w, bird.h);
+      else { ctx.fillStyle = '#ffa'; ctx.fillRect(bx,by,bird.w,bird.h); }
+      ctx.restore();
+      ctx.fillStyle = '#fff'; ctx.font = '36px Arial'; ctx.textAlign = 'center';
+      ctx.fillText('Flappy Steven', W/2, 80);
+      ctx.font = '16px Arial'; ctx.fillText('Click / Tap / Space to flap', W/2, H - 120);
+    }
+
+    function drawPlaceholder(){ drawStartScreen(); }
+
+    function showMessage(title, text) {
+      msgTitle.textContent = title;
+      msgText.textContent = text;
+      msg.style.display = 'block';
+    }
+    function hideMessage(){ msg.style.display = 'none'; }
+
+    drawStartScreen();
+
+    (function fixHiDPI(){
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(W * ratio);
+      canvas.height = Math.floor(H * ratio);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(ratio,0,0,ratio,0,0);
+    })();
+  </script>
+</body>
+</html>
